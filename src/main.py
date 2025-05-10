@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from uuid import uuid4
 import time
 from audio_handler import AudioHandler, create_phone_call_handler
+from text_to_speech import ElevenLabsTTSClient
 
 from speech_to_text import GladiaSTTClient
 
@@ -17,6 +18,7 @@ load_dotenv()
 
 app = FastAPI(title="Monsieur STT/TTS API")
 stt_client = GladiaSTTClient()
+tts_client = ElevenLabsTTSClient()
 
 # Add these variables at an appropriate place after app initialization
 active_calls = {}
@@ -137,9 +139,28 @@ class TTSRequest(BaseModel):
 
 @app.post("/tts")
 async def text_to_speech(request: TTSRequest):
+    """Generate audio from text (non-streaming)"""
     try:
-        # Placeholder for actual TTS processing
-        return {"audio_url": "path/to/generated/audio.mp3", "text": request.text}
+        audio_bytes = await tts_client.synthesize_text(
+            text=request.text,
+            voice_id=request.voice or "21m00Tcm4TlvDq8ikWAM",
+            use_fast_model="flash" in request.model.lower() if request.model else False
+        )
+        
+        # Save audio to file with timestamp
+        timestamp = int(time.time())
+        filename = f"tts/{timestamp}.mp3"
+        os.makedirs(os.path.dirname(os.path.abspath(filename)), exist_ok=True)
+        
+        with open(filename, "wb") as f:
+            f.write(audio_bytes)
+        
+        return {
+            "audio_url": filename,
+            "text": request.text,
+            "voice": request.voice,
+            "language": request.language
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -233,6 +254,35 @@ async def list_calls():
         })
     
     return calls_list
+
+@app.websocket("/ws/tts")
+async def websocket_tts(websocket: WebSocket):
+    """WebSocket endpoint for streaming text-to-speech"""
+    await websocket.accept()
+    
+    try:
+        # Process the first message to get configuration
+        config = await websocket.receive_json()
+        voice_id = config.get("voice_id", "21m00Tcm4TlvDq8ikWAM")
+        use_fast_model = config.get("use_fast_model", False)
+        
+        await websocket.send_json({
+            "status": "ready",
+            "voice_id": voice_id,
+            "model": "eleven_flash_v2_5" if use_fast_model else "eleven_multilingual_v2"
+        })
+        
+        # Process streaming text
+        await tts_client.process_streaming_text(
+            websocket, 
+            voice_id, 
+            use_fast_model
+        )
+        
+    except Exception as e:
+        await websocket.send_json({"error": str(e)})
+    finally:
+        await websocket.close()
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
