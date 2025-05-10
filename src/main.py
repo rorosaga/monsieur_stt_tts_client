@@ -8,10 +8,9 @@ import os
 from dotenv import load_dotenv
 from uuid import uuid4
 import time
-from audio_handler import AudioHandler, create_phone_call_handler
-from text_to_speech import ElevenLabsTTSClient
-
-from speech_to_text import GladiaSTTClient
+from .audio_handler import AudioHandler, create_phone_call_handler
+from .text_to_speech import ElevenLabsTTSClient
+from .speech_to_text import GladiaSTTClient
 
 # Load environment variables
 load_dotenv()

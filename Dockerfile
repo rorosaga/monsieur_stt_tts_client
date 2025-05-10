@@ -1,12 +1,16 @@
 FROM python:3.11-slim
-
 WORKDIR /app
 
-# Install system dependencies including FFmpeg for audio processing
+# Install system dependencies including build tools and FFmpeg for audio processing
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
     ffmpeg \
+    portaudio19-dev \
+    python3-dev \
     libportaudio2 \
     libasound2-dev \
+    pkg-config \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -26,4 +30,4 @@ RUN mkdir -p tts calls
 EXPOSE 8000
 
 # Command to run the application
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
